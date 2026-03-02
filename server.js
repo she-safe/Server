@@ -297,8 +297,9 @@ app.post("/panic", authenticateUserToken, upload.single("audio"), async (req, re
   try {
     const userId = req.userId;
 
-    // const latitude = Number(req.body.latitude);
-    // const longitude = Number(req.body.longitude);
+    const latitude = Number(req.body.latitude);
+    const longitude = Number(req.body.longitude);
+    console.log(latitude,longitude)
     // parse incoming JSON
     const samples = JSON.parse(req.body.samples || "[]");
 
@@ -340,7 +341,10 @@ app.post("/panic", authenticateUserToken, upload.single("audio"), async (req, re
         userId,
         score: dangerIndex,
         ...(Object.keys(pushOps).length && { $push: pushOps }),
-        $set: { updatedAt: new Date() },
+        $set: {
+          location: { latitude: latitude, longitude: longitude },
+          updatedAt: new Date(),
+        },
         $setOnInsert: { createdAt: new Date() },
       },
       { upsert: true },
