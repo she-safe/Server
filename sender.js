@@ -1,4 +1,7 @@
 const fs = require("fs/promises");
+require("dotenv").config()
+
+const AudioserverURL = process.env.AudioserverURL||"http://localhost:5000"
 
 async function sendAudio(filePath) {
   // Read file fully into memory buffer
@@ -10,7 +13,7 @@ async function sendAudio(filePath) {
   const form = new FormData();
   form.append("file", blob, "audio.m4a");
 
-  const response = await fetch("http://localhost:5000/predict", {
+  const response = await fetch(`${AudioserverURL}/predict`, {
     method: "POST",
     body: form
   });
