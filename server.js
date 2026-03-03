@@ -373,10 +373,12 @@ app.post("/panic", authenticateUserToken, upload.single("audio"), async (req, re
 app.post("/admin/data", authenticateAdminToken,async (req, res) => {
   // console.log(req.body)
   const data = await Data.findOne({ userId: req.body.userId });
+  const user = await User.findOne({userId:req.body.userId});
   if (!data) return res.status(404).json({ message: "no data" });
 
   res.json({
     userId: data.userId,
+    username:user.username,
     location: data.location,
     score: data.score,
     updatedAt: data.updatedAt,
