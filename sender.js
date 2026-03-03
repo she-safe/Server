@@ -1,7 +1,7 @@
 const fs = require("fs/promises");
 require("dotenv").config()
 
-const AudioserverURL = process.env.AudioserverURL||"http://localhost:5000"
+const AudioserverURL = process.env.AudioServerURL||"http://localhost:5000"
 
 async function sendAudio(filePath) {
   // Read file fully into memory buffer
