@@ -219,23 +219,24 @@ app.post("/signup", authLimiter, async (req, res) => {
     return res.status(409).json({ message: "Username already taken" });
 
   const passwordHash = await bcrypt.hash(password, 8);
-  const userId = `user${Date.now()}`;
-
+  var time = Date.now();
+  const userId = `user${time}`;
+  // console.log("signed up ",userId);
   const newUser = new User({ userId, username, passwordHash });
   await newUser.save();
 
   // const newTodo = new Todo({ userId: userId, tasks: {}, comptasks: {} });
   // await newTodo.save();
 
-  const token = jwt.sign({ userId: userId }, JWT_USER_SECRET, { expiresIn: "7d" });
-  res.status(201).json({ token });
+  const token = jwt.sign({ userId: newUser.userId }, JWT_USER_SECRET, { expiresIn: "7d" });
+  res.json({ token });
 });
 
 app.get("/whoami", authenticateUserToken, async (req, res) => {
-  const user = await User.findOne({ id: req.userId });
+  const user = await User.findOne({ userId: req.userId });
   if (!user) return res.status(404).json({ message: "invalid token" });
 
-  res.send({ id: user.id, username: user.username });
+  res.send({ UserId: user.id, username: user.username });
 });
 
 function authenticateUserToken(req, res, next) {
@@ -296,14 +297,20 @@ app.get("/health", (req, res) => {
 app.post("/panic", authenticateUserToken, upload.single("audio"), async (req, res) => {
   try {
     const userId = req.userId;
+    const user = await User.findOne({userId:userId})
+    const prevData = await Data.findOne({userId:userId});
+    if(!user){
+      // console.log("user not found",userId)
+      return res.status(400).json({ message: "UserId mismatch" })
+    }
 
     const latitude = Number(req.body.latitude);
     const longitude = Number(req.body.longitude);
-    console.log(latitude,longitude)
+    // console.log(latitude,longitude)
     // parse incoming JSON
     const samples = JSON.parse(req.body.samples || "[]");
 
-    var dangerIndex = 0;
+    var dangerIndex = prevData?.score||0;
     let audioEntry = null;
 
     if (req.file) {
@@ -311,6 +318,7 @@ app.post("/panic", authenticateUserToken, upload.single("audio"), async (req, re
         const audioResult = await sendAudio(`./uploads/${req.file.filename}`);
         console.log(audioResult);
         dangerIndex = audioResult.confidence_score;
+        if(dangerIndex!=0)dangerIndex = (dangerIndex+audioResult.confidence_score)/2; //weighted average
       } catch (err) {
         console.log(err);
       }
@@ -372,7 +380,11 @@ app.post("/panic", authenticateUserToken, upload.single("audio"), async (req, re
 /* data (self) */
 app.post("/admin/data", authenticateAdminToken,async (req, res) => {
   // console.log(req.body)
+  const admin = await Admin.findOne({adminId: req.adminId});
+  if(!admin)return res.status(401).json({ message: "Invalid Admin"});
+  // if(admin)console.log(admin.adminName);
   const data = await Data.findOne({ userId: req.body.userId });
+  // console.log(req.body.userId)
   const user = await User.findOne({userId:req.body.userId});
   if (!data) return res.status(404).json({ message: "no data" });
 
@@ -406,6 +418,9 @@ app.post("/admin/data", authenticateAdminToken,async (req, res) => {
 // });
 
 app.get("/admin/users", authenticateAdminToken, async (req, res) => {
+  const admin = await Admin.findOne({adminId: req.adminId});
+  if(!admin)return res.status(401).json({ message: "Invalid Admin"});
+  // if(admin)console.log(admin.adminName);
   const users = await Data.find({}, { userId: 1, score: 1, _id: 0 })
     .sort({ score: -1 });
 
