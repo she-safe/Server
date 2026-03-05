@@ -10,11 +10,13 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
+//import audio sender function
 const { sendAudio } = require("./sender.js");
+//import model
+const User = require("./model/User.js");
+const Admin = require("./model/Admin.js");
+const Data = require("./model/Data.js");
 
-// Generating a unique UUID
-// const id = crypto.randomUUID();
-// console.log(id);
 
 // server init
 const app = express();
@@ -53,82 +55,29 @@ app.use((req, res, next) => {
   next();
 });
 
-mongoose
-  .connect(
-    process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/BoundingBoxers",
-  )
+mongoose.connect(process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/BoundingBoxers")
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.log("MongoDB error", err));
 
-//Schema
-const dataSchema = new mongoose.Schema({
-  userId: { type: String, required: true },
-  score: Number,
-  location: { latitude: Number, longitude: Number },
+  
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per window
+    message: { message: "Too many attempts, please try again later" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
 
-  //unified motion samples
-  motionSamples: [
-    [
-      {
-        t: { type: Number, required: true }, // timestamp in ms/seconds from client
-        ax: Number,
-        ay: Number,
-        az: Number,
-        gx: Number,
-        gy: Number,
-        gz: Number,
-      },
-    ],
-  ],
+  const logsignSchema = Joi.object({
+    username: Joi.string().alphanum().min(3).max(30).required(),
+    password: Joi.string().min(6).max(128).required(),
+  });
 
-  //  audio section untouched
-  audioFiles: [
-    {
-      filename: String,
-      storedName: String,
-      mimeType: String,
-      // path: String,
-      size: Number,
-      dangerIndex: Number,
-      timestamp: { type: Date, default: Date.now },
-    },
-  ],
-
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-});
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 requests per window
-  message: { message: "Too many attempts, please try again later" },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-const logsignSchema = Joi.object({
-  username: Joi.string().alphanum().min(3).max(30).required(),
-  password: Joi.string().min(6).max(128).required(),
-});
-const AdminLoginSchema = Joi.object({
-  adminName: Joi.string().alphanum().min(3).max(30).required(),
-  password: Joi.string().min(6).max(128).required(),
-})
-const userSchema = new mongoose.Schema({
-  userId: String,
-  username: String,
-  passwordHash: String,
-});
-const adminSchema = new mongoose.Schema({
-  adminId: String,
-  adminName: String,
-  passwordHash: String,
-});
-
-//Indexing the data entries
-dataSchema.index({ userId: 1 });
-
-const User = mongoose.model("User", userSchema);
-const Admin = mongoose.model("Admin", adminSchema);
-const Data = mongoose.model("Data", dataSchema);
+  const AdminLoginSchema = Joi.object({
+    adminName: Joi.string().alphanum().min(3).max(30).required(),
+    password: Joi.string().min(6).max(128).required(),
+  })
+  
 
 app.get("/ping", (req, res) => {
   res.status(200).json({ message: "pong" });
@@ -284,7 +233,7 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-//health
+/* health */
 app.get("/health", (req, res) => {
   res.json({
     status: "active",
@@ -377,7 +326,7 @@ app.post("/panic", authenticateUserToken, upload.single("audio"), async (req, re
   }
 });
 
-/* data (self) */
+/* individual data */
 app.post("/admin/data", authenticateAdminToken,async (req, res) => {
   // console.log(req.body)
   const admin = await Admin.findOne({adminId: req.adminId});
@@ -398,25 +347,7 @@ app.post("/admin/data", authenticateAdminToken,async (req, res) => {
   });
 });
 
-/* stream audio */
-// app.get("/audio/:filename", async (req, res) => {
-//   try {
-//     const file = await gfs.files.findOne({ filename: req.params.filename });
-
-//     if (!file) {
-//       return res.status(404).json({ message: "File not found" });
-//     }
-
-//     //set correct content type
-//     res.set("Content-Type", file.contentType);
-
-//     const readStream = gfs.createReadStream(file.filename);
-//     readStream.pipe(res);
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// });
-
+/* collective data*/
 app.get("/admin/users", authenticateAdminToken, async (req, res) => {
   const admin = await Admin.findOne({adminId: req.adminId});
   if(!admin)return res.status(401).json({ message: "Invalid Admin"});
