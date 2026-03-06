@@ -1,37 +1,43 @@
-const express = require("express");
-const rateLimit = require("express-rate-limit");
-const Joi = require("joi");
-const jwt = require("jsonwebtoken");
-const cors = require("cors");
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
-const mongoose = require("mongoose");
-require("dotenv").config();
-const crypto = require("crypto");
-const bcrypt = require("bcryptjs");
-//import audio sender function
-const { sendAudio } = require("./sender.js");
-//import model
-const User = require("./model/User.js");
-const Admin = require("./model/Admin.js");
-const Data = require("./model/Data.js");
+import express from "express";
+import rateLimit from "express-rate-limit";
+import Joi from "joi";
+import jwt from "jsonwebtoken";
+import cors from "cors";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
+import { sendAudio } from "./sender.js";
+import { fileURLToPath } from "url";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config();
+//import model
+import User from "./model/User.js";
+import Admin from "./model/Admin.js";
+import Data from "./model/Data.js";
 
 // server init
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_USER_SECRET = process.env.JWT_USER_SECRET || "example";
-const JWT_ADMIN_SECRET = process.env.JWT_ADMIN_SECRET || "axample";
+const JWT_PATIENT_SECRET = process.env.JWT_PATIENT_SECRET || "example";
+const JWT_DOCTOR_SECRET = process.env.JWT_DOCTOR_SECRET || "axample";
 app.set("trust proxy", 1);
 
 //connetingconst cors = require("cors");
 
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -55,29 +61,30 @@ app.use((req, res, next) => {
   next();
 });
 
-mongoose.connect(process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/BoundingBoxers")
+mongoose
+  .connect(
+    process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/BoundingBoxers",
+  )
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.log("MongoDB error", err));
 
-  
-  const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // limit each IP to 5 requests per window
-    message: { message: "Too many attempts, please try again later" },
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 requests per window
+  message: { message: "Too many attempts, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
-  const logsignSchema = Joi.object({
-    username: Joi.string().alphanum().min(3).max(30).required(),
-    password: Joi.string().min(6).max(128).required(),
-  });
+const UserLoginSchema = Joi.object({
+  username: Joi.string().alphanum().min(3).max(30).required(),
+  password: Joi.string().min(6).max(128).required(),
+});
 
-  const AdminLoginSchema = Joi.object({
-    adminName: Joi.string().alphanum().min(3).max(30).required(),
-    password: Joi.string().min(6).max(128).required(),
-  })
-  
+const AdminLoginSchema = Joi.object({
+  adminName: Joi.string().alphanum().min(3).max(30).required(),
+  password: Joi.string().min(6).max(128).required(),
+});
 
 app.get("/ping", (req, res) => {
   res.status(200).json({ message: "pong" });
@@ -124,7 +131,9 @@ app.post("/adminsignup", authLimiter, async (req, res) => {
   // const newTodo = new Todo({ userId: userId, tasks: {}, comptasks: {} });
   // await newTodo.save();
 
-  const token = jwt.sign({ adminId: adminId }, JWT_ADMIN_SECRET, { expiresIn: "1d" });
+  const token = jwt.sign({ adminId: adminId }, JWT_ADMIN_SECRET, {
+    expiresIn: "1d",
+  });
   res.status(201).json({ token });
 });
 
@@ -136,7 +145,7 @@ app.get("/adminwhoami", authenticateAdminToken, async (req, res) => {
 });
 
 app.post("/login", authLimiter, async (req, res) => {
-  const { error } = logsignSchema.validate(req.body);
+  const { error } = UserLoginSchema.validate(req.body);
   if (error) return res.status(400).json({ message: error.details[0].message });
   const { username, password } = req.body;
 
@@ -157,7 +166,7 @@ app.post("/login", authLimiter, async (req, res) => {
 });
 
 app.post("/signup", authLimiter, async (req, res) => {
-  const { error } = logsignSchema.validate(req.body);
+  const { error } = UserLoginSchema.validate(req.body);
   if (error) return res.status(400).json({ message: error.details[0].message });
   const { username, password } = req.body;
 
@@ -177,7 +186,9 @@ app.post("/signup", authLimiter, async (req, res) => {
   // const newTodo = new Todo({ userId: userId, tasks: {}, comptasks: {} });
   // await newTodo.save();
 
-  const token = jwt.sign({ userId: newUser.userId }, JWT_USER_SECRET, { expiresIn: "7d" });
+  const token = jwt.sign({ userId: newUser.userId }, JWT_USER_SECRET, {
+    expiresIn: "7d",
+  });
   res.json({ token });
 });
 
@@ -243,117 +254,138 @@ app.get("/health", (req, res) => {
 });
 
 /* panic */
-app.post("/panic", authenticateUserToken, upload.single("audio"), async (req, res) => {
-  try {
-    const userId = req.userId;
-    const user = await User.findOne({userId:userId})
-    const prevData = await Data.findOne({userId:userId});
-    if(!user){
-      // console.log("user not found",userId)
-      return res.status(400).json({ message: "UserId mismatch" })
-    }
+app.post(
+  "/panic",
+  authenticateUserToken,
+  upload.single("audio"),
+  async (req, res) => {
+    try {
+      const userId = req.userId;
 
-    const latitude = Number(req.body.latitude);
-    const longitude = Number(req.body.longitude);
-    // console.log(latitude,longitude)
-    // parse incoming JSON
-    const samples = JSON.parse(req.body.samples || "[]");
-
-    var dangerIndex = prevData?.score||0;
-    let audioEntry = null;
-
-    if (req.file) {
-      try {
-        const audioResult = await sendAudio(`./uploads/${req.file.filename}`);
-        console.log(audioResult);
-        dangerIndex = audioResult.confidence_score;
-        if(dangerIndex!=0)dangerIndex = (dangerIndex+audioResult.confidence_score)/2; //weighted average
-      } catch (err) {
-        console.log(err);
+      const user = await User.findOne({ userId });
+      if (!user) {
+        return res.status(400).json({ message: "UserId mismatch" });
       }
 
-      audioEntry = {
-        filename: req.file.originalname,
-        storedName: req.file.filename,
-        mimeType: req.file.mimetype,
-        // path: req.file.path,
-        size: req.file.size,
-        dangerIndex: dangerIndex,
-      };
-    }
+      const prevData = await Data.findOne({ userId });
+      const latitude = Number(req.body.latitude);
+      const longitude = Number(req.body.longitude);
 
-    const pushOps = {};
+      const location =
+        !isNaN(latitude) && !isNaN(longitude) ? { latitude, longitude } : null;
+      const samples = JSON.parse(req.body.samples || "[]");
 
-    if (audioEntry) {
-      pushOps.audioFiles = audioEntry;
-    }
+      let dangerIndex = prevData?.score || 0;
+      let audioEntry = null;
 
-    if (samples.length) {
-      pushOps.motionSamples = samples;
-    }
+      if (req.file) {
+        try {
+          const audioResult = await sendAudio(`./uploads/${req.file.filename}`);
+          console.log(audioResult);
 
-    await Data.findOneAndUpdate(
-      { userId },
-      {
-        userId,
-        score: dangerIndex,
-        ...(Object.keys(pushOps).length && { $push: pushOps }),
-        $set: {
-          location: { latitude: latitude, longitude: longitude },
-          updatedAt: new Date(),
+          const newScore = audioResult.confidence_score || 0;
+
+          if (dangerIndex !== 0) {
+            dangerIndex = (dangerIndex + newScore) / 2;
+          } else {
+            dangerIndex = newScore;
+          }
+        } catch (err) {
+          console.log(err);
+        }
+
+        audioEntry = {
+          filename: req.file.originalname,
+          storedName: req.file.filename,
+          mimeType: req.file.mimetype,
+          size: req.file.size,
+          dangerIndex: dangerIndex,
+        };
+      }
+
+      const pushOps = {};
+
+      if (audioEntry) {
+        pushOps.audioFiles = audioEntry;
+      }
+
+      if (samples.length) {
+        pushOps.motionSamples = samples;
+      }
+
+      if (location) {
+        pushOps.location = {
+          $each: [location],
+          $slice: -10,
+        };
+      }
+
+      await Data.findOneAndUpdate(
+        { userId },
+        {
+          $set: {
+            userId,
+            score: dangerIndex,
+            updatedAt: new Date(),
+          },
+
+          ...(Object.keys(pushOps).length && { $push: pushOps }),
+
+          $setOnInsert: {
+            createdAt: new Date(),
+          },
         },
-        $setOnInsert: { createdAt: new Date() },
-      },
-      { upsert: true },
-    );
+        { upsert: true },
+      );
 
-    res.json({
-      status: "panic_received",
-      samplesCount: samples.length,
-      audioReceived: !!req.file,
-      dangerIndex: Number(dangerIndex.toFixed(2)),
-    });
+      res.json({
+        status: "panic_received",
+        samplesCount: samples.length,
+        audioReceived: !!req.file,
+        dangerIndex: Number(dangerIndex.toFixed(2)),
+      });
 
-    // delete file in 10 min
-    if (req.file) {
-      setTimeout(() => {
-        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-      }, 600000);
+      if (req.file) {
+        setTimeout(() => {
+          if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        }, 600000);
+      }
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "panic failed" });
     }
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "panic failed" });
-  }
-});
+  },
+);
 
 /* individual data */
-app.post("/admin/data", authenticateAdminToken,async (req, res) => {
+app.post("/admin/data", authenticateAdminToken, async (req, res) => {
   // console.log(req.body)
-  const admin = await Admin.findOne({adminId: req.adminId});
-  if(!admin)return res.status(401).json({ message: "Invalid Admin"});
+  const admin = await Admin.findOne({ adminId: req.adminId });
+  if (!admin) return res.status(401).json({ message: "Invalid Admin" });
   // if(admin)console.log(admin.adminName);
   const data = await Data.findOne({ userId: req.body.userId });
   // console.log(req.body.userId)
-  const user = await User.findOne({userId:req.body.userId});
+  const user = await User.findOne({ userId: req.body.userId });
   if (!data) return res.status(404).json({ message: "no data" });
 
   res.json({
     userId: data.userId,
-    username:user.username,
+    username: user.username,
     location: data.location,
     score: data.score,
     updatedAt: data.updatedAt,
-    createdAt: data.createdAt
+    createdAt: data.createdAt,
   });
 });
 
 /* collective data*/
 app.get("/admin/users", authenticateAdminToken, async (req, res) => {
-  const admin = await Admin.findOne({adminId: req.adminId});
-  if(!admin)return res.status(401).json({ message: "Invalid Admin"});
+  const admin = await Admin.findOne({ adminId: req.adminId });
+  if (!admin) return res.status(401).json({ message: "Invalid Admin" });
   // if(admin)console.log(admin.adminName);
-  const users = await Data.find({}, { userId: 1, score: 1, _id: 0 })
-    .sort({ score: -1 });
+  const users = await Data.find({}, { userId: 1, score: 1, _id: 0 }).sort({
+    score: -1,
+  });
 
   res.json(users);
 });

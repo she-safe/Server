@@ -3,8 +3,13 @@ import mongoose from "mongoose";
 const dataSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   score: Number,
-  location: { latitude: Number, longitude: Number },
-
+  location: [
+    {
+      latitude: Number,
+      longitude: Number,
+      timestamp: { type: Date, default: Date.now },
+    },
+  ],
   //unified motion samples
   motionSamples: [
     [
@@ -37,5 +42,4 @@ const dataSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
-
-export const Data = mongoose.model("Data", dataSchema);
+export default mongoose.model("Data", dataSchema);
