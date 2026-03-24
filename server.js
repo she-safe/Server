@@ -253,6 +253,47 @@ app.get("/health", (req, res) => {
   });
 });
 
+/* panic location*/
+app.post("/panic/loc", authenticateUserToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const user = await User.findOne({ usedId });
+    if (!user) {
+      return res.status(400).json({ message: "UserId mismatch" });
+    }
+    const latitude = Number(req.body.latitude);
+    const longitude = Number(req.body.longitude);
+    const location =
+      !isNaN(latitude) && !isNaN(longitude) ? { latitude, longitude } : null;
+    const samples = JSON.parse(req.body.samples || "[]");
+    const pushOps = {};
+    if (location) {
+      pushOps.location = {
+        $each: [location],
+        $slice: -10,
+      };
+    }
+    await Data.findOneAndUpdate(
+      { userId },
+      {
+        $set: { userId },
+
+        ...(Object.keys(pushOps).length && { $push: pushOps }),
+
+        $setOnInsert: {
+          createdAt: new Date(),
+        },
+      },
+      { upsert: true },
+    );
+
+    res.json({ status: "panic_location_received" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "panic failed" });
+  }
+});
+
 /* panic */
 app.post(
   "/panic",
@@ -268,12 +309,6 @@ app.post(
       }
 
       const prevData = await Data.findOne({ userId });
-      const latitude = Number(req.body.latitude);
-      const longitude = Number(req.body.longitude);
-
-      const location =
-        !isNaN(latitude) && !isNaN(longitude) ? { latitude, longitude } : null;
-      const samples = JSON.parse(req.body.samples || "[]");
 
       let dangerIndex = prevData?.score || 0;
       let audioEntry = null;
@@ -311,13 +346,6 @@ app.post(
 
       if (samples.length) {
         pushOps.motionSamples = samples;
-      }
-
-      if (location) {
-        pushOps.location = {
-          $each: [location],
-          $slice: -10,
-        };
       }
 
       await Data.findOneAndUpdate(
