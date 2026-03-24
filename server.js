@@ -25,8 +25,8 @@ import Data from "./model/Data.js";
 // server init
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_PATIENT_SECRET = process.env.JWT_PATIENT_SECRET || "example";
-const JWT_DOCTOR_SECRET = process.env.JWT_DOCTOR_SECRET || "axample";
+const JWT_USER_SECRET = process.env.JWT_USER_SECRET || "example";
+const JWT_ADMIN_SECRET = process.env.JWT_ADMIN_SECRET || "axample";
 app.set("trust proxy", 1);
 
 //connetingconst cors = require("cors");
