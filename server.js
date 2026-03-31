@@ -208,7 +208,8 @@ function authenticateUserToken(req, res, next) {
     const decoded = jwt.verify(token, JWT_USER_SECRET);
     req.userId = decoded.userId;
     next();
-  } catch {
+  } catch (e) {
+    console.log(e);
     res.sendStatus(403);
   }
 }
@@ -257,7 +258,7 @@ app.get("/health", (req, res) => {
 app.post("/panic/loc", authenticateUserToken, async (req, res) => {
   try {
     const userId = req.userId;
-    const user = await User.findOne({ usedId });
+    const user = await User.findOne({ userId });
     if (!user) {
       return res.status(400).json({ message: "UserId mismatch" });
     }
@@ -265,7 +266,6 @@ app.post("/panic/loc", authenticateUserToken, async (req, res) => {
     const longitude = Number(req.body.longitude);
     const location =
       !isNaN(latitude) && !isNaN(longitude) ? { latitude, longitude } : null;
-    const samples = JSON.parse(req.body.samples || "[]");
     const pushOps = {};
     if (location) {
       pushOps.location = {
@@ -296,7 +296,7 @@ app.post("/panic/loc", authenticateUserToken, async (req, res) => {
 
 /* panic */
 app.post(
-  "/panic",
+  "/panic/data",
   authenticateUserToken,
   upload.single("audio"),
   async (req, res) => {
@@ -307,6 +307,7 @@ app.post(
       if (!user) {
         return res.status(400).json({ message: "UserId mismatch" });
       }
+      const samples = JSON.parse(req.body.samples || "[]");
 
       const prevData = await Data.findOne({ userId });
 
